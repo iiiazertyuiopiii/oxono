@@ -2,15 +2,17 @@
 #include <vector>
 #include <string>
 
+#include "Board.hpp"
+
 using namespace std;
 
 int main()
 {
-    vector<string> msg {"Hello", "C++", "World", "from", "VS Code", "and the C++ extension!"};
-
-    for (const string& word : msg)
-    {
-        cout << word << " ";
+    cout << "*********************************************\n";
+    Board b;
+    b.dump();
+    while(b.playFirstValidMove()){
+        b.dump();
     }
-    cout << endl;
+    b.dump();
 }   
