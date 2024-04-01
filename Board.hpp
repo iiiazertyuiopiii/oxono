@@ -3,6 +3,14 @@
 
 class Board {
 
+    //moves is a list of triple (totem position,cell position,move type)
+    struct move{
+        unsigned int totem;
+        unsigned int cell;
+        bool isO;
+    };
+    typedef std::vector<move> moves;
+
     public:
     /*
     0  6 12 18 24 30
@@ -16,6 +24,7 @@ class Board {
     Board() : cells(0),cur_cells(0),cellsO(0),cellsX(0),movesO{0,0},movesX{0,0},totemO(14),totemX(21),curPlayer(0){}
 
     private:
+        static constexpr int64_t FULL_COL = 63;
         int64_t cells; // bitmap of the non empty cells
         int64_t cur_cells; // bitmap of the cells of active player
         
@@ -30,12 +39,13 @@ class Board {
 
         bool curPlayer;
 
-    unsigned int firstFreeCell(){
+    std::vector<unsigned int> allFreeCells(){
+        std::vector<unsigned int> res;
         int i=0;
         for(i=0;i<36;i++){
-            if(!full(i) && i != totemO && i != totemX)break;
+            if(!full(i) && i != totemO && i != totemX) res.push_back(i);
         }
-        return i;
+        return res;
     }
 
     bool full(unsigned int pos){
@@ -61,39 +71,96 @@ class Board {
         o?movesO[curPlayer] = movesO[curPlayer]+1 : movesX[curPlayer] = movesX[curPlayer]+1;
     }
 
-    unsigned int tryPlayAround(unsigned int pos, bool o){
+    std::vector<unsigned int> legalMovesAround(unsigned int pos){
+        std::vector<unsigned int> result;
         if(pos%6 !=5 && !full(pos+1)){ //try down
-            pos=pos+1;
-        } else if(pos>5 && !full(pos-6)){ //left
-            pos=pos-6;
-        } else if(pos%6 != 0 && !full(pos-1)){ //up
-            pos=pos-1;
-        } else if(pos<30 && !full(pos+6)){ //right
-            pos=pos+6;
-        } else { //if totem is surrounded, we can play anwyhere
-            pos = firstFreeCell();
+            result.push_back(pos+1);
+        } 
+        if(pos>5 && !full(pos-6)){ //left
+            result.push_back(pos-6);
         }
-        set(pos,o);
-        return pos;
+        if(pos%6 != 0 && !full(pos-1)){ //up
+            result.push_back(pos-1);
+        }
+        if(pos<30 && !full(pos+6)){ //right
+            result.push_back(pos+6);
+        }
+        if(!result.empty()){
+            return result;
+        } else { //if totem is surrounded, we can play anwyhere
+            return allFreeCells();
+        }
     }
 
-    unsigned int moveTotem(unsigned int pos){
-        for(int i=0;i<4;i++){
-            if(pos%6 < 6-(i+1) && !full(pos+1+i)){ //try down
-               return pos+=(i+1);
-            } else if(pos>5+6*i && !full(pos-6*(i+1))){ //try left
-                return pos-=(6*(i+1));
-            } else if(pos%6 > i && !full(pos-(i+1))){
-                return pos-=(i+1);
-            } else if(pos<30-6*i && !full(pos+6*(i+1))){
-                return pos+=(6*(i+1));
+
+    std::vector<unsigned int> legalTotemMoves(unsigned int pos){
+        std::vector<unsigned int> res;
+        bool noD = false,noL = false,noU = false,noR = false;
+        //try all 4 directions but stop upon hitting wall or full cell
+        for(int i=0;i<=4;i++){
+            
+            if(pos%6 < 6-(i+1) && !full(pos+1+i) && !noD){ //try down
+                res.push_back(pos+(i+1));
+            } else {
+                noD = true;
+            } 
+            
+            if(pos>5+6*i && !full(pos-6*(i+1)) && !noL){ //try left
+                res.push_back(pos-(6*(i+1)));
+            } else {
+                noL = true;
+            }
+            
+            if(pos%6 > i && !full(pos-(i+1)) && !noU){
+                res.push_back(pos-(i+1));
+            } else {
+                noU = true;
+            }
+            
+            if(pos<30-6*i && !full(pos+6*(i+1)) && !noR){
+                res.push_back(pos+(6*(i+1)));
+            } else {
+                noR = true;
             }
         }
-        return firstFreeCell();
+        //try all 4 directions skipping full cells but stop upon finding first free cell
+        if(res.empty()){
+             bool d = false,l = false,u = false,r = false;
+            for(int i=1;i<=4;i++){
+                if(pos%6 < 6-(i+1) && !full(pos+1+i) && !d){ //try down
+                    res.push_back(pos+(i+1));
+                    d=true;
+                } 
+                if(pos>5+6*i && !full(pos-6*(i+1)) && !l){ //try left
+                    res.push_back(pos-(6*(i+1)));
+                    l=true;
+                } 
+                if(pos%6 > i && !full(pos-(i+1)) && !u){
+                    res.push_back(pos-(i+1));
+                    u = true;
+                } 
+                if(pos<30-6*i && !full(pos+6*(i+1)) && !r){
+                    res.push_back(pos+(6*(i+1)));
+                    r = true;
+                }
+            }
+        }
+        if(!res.empty()){
+            /*std::cout << "Legal moves for totem : ";
+            for(unsigned int i : res){
+                std::cout << i << " ";
+            }
+            std::cout << std::endl;*/
+            return res;
+        } else { //in the rare case nothing is free for the totem horizontally/diagonally, it can go anywhere
+            std::cout << "all moves legal for totem!";
+            return allFreeCells();
+        }
     }
 
-    int64_t computeWinning(int64_t c){
+    int64_t computeWinning(int64_t c, unsigned int played){
         int64_t winning = 0;
+        //horizontal
         int64_t p = (c << 6) & (c << 2 * 6);
         winning |= p & (c << 3 * 6);
         winning |= p & (c >> 6);
@@ -101,43 +168,96 @@ class Board {
         winning |= p & (c << 6);
         winning |= p & (c >> 3 * 6);
 
-        //vertical
-        p = (c << 1) & (c << 2 );
-        winning |= p & (c << 3);
-        winning |= p & (c >> 1);
+        //vertical - don't allow crossing current column
+        p = (c << 1) & (c << 2);
+        if(played % 6 > 2){
+            winning |= p & (c << 3);
+        }
+        if(played % 6 > 1 && played % 6 < 5){
+            winning |= p & (c >> 1);
+        }
         p = (c >> 1) & (c >> 2);
-        winning |= p & (c << 1);
-        winning |= p & (c >> 3);
+        if(played % 6 < 4 && played % 6 > 0){
+            winning |= p & (c << 1);
+        }
+        if(played % 6 < 3){
+            winning |= p & (c >> 3);
+        }
         return winning;
     }
 
     bool isWinningMove(unsigned int played, bool playO){
         
         // check win by color
-        if(computeWinning(cur_cells) & (1LL << played)) return true;
+        if(computeWinning(cur_cells, played) & (1LL << played)){
+            std::cout << "Win by color !\n";
+            return true;
+        }
         //check win by x/X or o/O
-        if(computeWinning(playO?cellsO:cellsX) & (1LL << played)) return true;
+        if(computeWinning(playO?cellsO:cellsX, played) & (1LL << played)){
+            std::cout << "Win by shape !\n";
+            return true;
+        } 
 
         return false;
     }
 
+    moves getNextMoves(){
+        moves result;
+
+        bool canPlayO = movesO[curPlayer] < 8; //try to play o first always. in this game it's always possible to move totem
+        bool canPlayX = movesX[curPlayer] < 8;
+        
+        if(!canPlayO && !canPlayX){ //current player can't play anymore, so game over
+            return result;
+        }
+
+        if(canPlayO){
+            unsigned int oldT = totemO;
+            for(unsigned int t : legalTotemMoves(totemO)){
+                totemO = t; //legal moves need to be computed with the new totem position
+                for(unsigned int c : legalMovesAround(t)){
+                    result.push_back({t,c,true});
+                }
+            }
+            totemO = oldT;
+        }
+
+        if(canPlayX){
+            unsigned int oldT = totemX;
+            for(unsigned int t : legalTotemMoves(totemX)){
+                totemX = t;
+                for(unsigned int c : legalMovesAround(t)){
+                    result.push_back({t,c,false});
+                }
+            }
+            totemX = oldT;
+        }
+
+        return result;
+    }
+
+    move getFirstLegalMove(moves& m){
+        return m.at(0);
+    }
+
+    move getRdMove(moves& m){
+        return m.at(std::rand()%m.size());
+    }
+
     public:
 
-    bool playFirstValidMove(){
-        bool playO = movesO[curPlayer] < 8; //try to play o first always. in this game it's always possible to move totem
-        bool playX = movesX[curPlayer] < 8;
-        if(!playO && !playX){ //current player can't play anymore, so game over
+    bool playLoop(){
+        moves allMoves = getNextMoves();
+        if(allMoves.empty()){ //current player can't play anymore, so game over
             return false;
         }
-        unsigned int played;
-        if (playO){
-            totemO = moveTotem(totemO);
-            played = tryPlayAround(totemO,true);
-        } else {
-            totemX = moveTotem(totemX);
-            played = tryPlayAround(totemX,false);
-        }
-        if(isWinningMove(played,playO)){
+        //move m = getFirstLegalMove(allMoves);
+        move m = getRdMove(allMoves);
+        unsigned int played = m.cell;
+        m.isO?totemO = m.totem : totemX = m.totem;
+        set(played,m.isO);
+        if(isWinningMove(played,m.isO)){
             return false;
         }
         curPlayer = !curPlayer;

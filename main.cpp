@@ -8,10 +8,12 @@ using namespace std;
 
 int main()
 {
-    cout << "*********************************************\n";
+    unsigned int seed = time(nullptr);
+    cout << "********************************************* Seed : " << seed << endl;
+    srand(seed);
     Board b;
     b.dump();
-    while(b.playFirstValidMove()){
+    while(b.playLoop()){
         b.dump();
     }
     b.dump();
